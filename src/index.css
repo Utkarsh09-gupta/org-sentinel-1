@@ -1,0 +1,161 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 30 40% 93%;
+    --foreground: 225 50% 18%;
+
+    --card: 30 30% 96%;
+    --card-foreground: 225 50% 18%;
+
+    --popover: 30 30% 96%;
+    --popover-foreground: 225 50% 18%;
+
+    --primary: 24 85% 52%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 225 50% 25%;
+    --secondary-foreground: 30 30% 96%;
+
+    --muted: 30 20% 88%;
+    --muted-foreground: 225 20% 40%;
+
+    --accent: 24 85% 52%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 15% 82%;
+    --input: 30 15% 82%;
+    --ring: 24 85% 52%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 30 30% 96%;
+    --sidebar-foreground: 225 50% 18%;
+    --sidebar-primary: 24 85% 52%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 30 20% 88%;
+    --sidebar-accent-foreground: 225 50% 18%;
+    --sidebar-border: 30 15% 82%;
+    --sidebar-ring: 24 85% 52%;
+
+    /* Custom tokens */
+    --gradient-primary: linear-gradient(135deg, hsl(24 85% 52%), hsl(225 50% 25%));
+    --gradient-accent: linear-gradient(135deg, hsl(225 50% 25%), hsl(24 75% 58%));
+    --gradient-full: linear-gradient(135deg, hsl(24 85% 52%), hsl(225 50% 25%), hsl(24 75% 45%));
+    --glow-primary: 0 0 40px -12px hsl(24 85% 52% / 0.35);
+    --glow-secondary: 0 0 40px -12px hsl(225 50% 25% / 0.25);
+    --glow-accent: 0 0 40px -12px hsl(24 75% 58% / 0.3);
+    --glass-bg: hsl(30 25% 94% / 0.7);
+    --glass-border: hsl(30 15% 75% / 0.4);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply rounded-xl border;
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+    backdrop-filter: blur(20px);
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-full);
+  }
+
+  .gradient-text-primary {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-primary);
+  }
+
+  .glow-primary {
+    box-shadow: var(--glow-primary);
+  }
+
+  .glow-secondary {
+    box-shadow: var(--glow-secondary);
+  }
+
+  .glow-accent {
+    box-shadow: var(--glow-accent);
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 rounded-lg font-medium transition-all duration-300;
+    background: #F28C38;
+    color: #ffffff;
+  }
+
+  .btn-primary:hover {
+    background: #E07A2F;
+    box-shadow: 0 4px 20px -4px rgba(242, 140, 56, 0.4);
+    transform: translateY(-1px);
+  }
+
+  .btn-outline-glow {
+    @apply px-6 py-3 rounded-lg font-medium border transition-all duration-300;
+    background: transparent;
+    border-color: #F28C38;
+    color: #1E2A3A;
+  }
+
+  .btn-outline-glow:hover {
+    background: rgba(242, 140, 56, 0.08);
+    border-color: #E07A2F;
+    box-shadow: 0 4px 20px -4px rgba(242, 140, 56, 0.25);
+    transform: translateY(-1px);
+  }
+
+  .section-padding {
+    @apply px-4 sm:px-6 lg:px-8 py-20 lg:py-28 max-w-7xl mx-auto;
+  }
+
+  .grid-bg {
+    background-image: 
+      linear-gradient(hsl(30 15% 82% / 0.5) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(30 15% 82% / 0.5) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+}
+
+@layer utilities {
+  .animate-glow-pulse {
+    animation: glow-pulse 3s ease-in-out infinite alternate;
+  }
+
+  @keyframes glow-pulse {
+    0% { box-shadow: 0 0 30px -10px hsl(24 85% 52% / 0.2); }
+    100% { box-shadow: 0 0 60px -10px hsl(225 50% 25% / 0.3); }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+}
