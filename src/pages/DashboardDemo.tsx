@@ -104,7 +104,11 @@ const DashboardDemo = () => {
             <div className="flex justify-center mb-3">
               <Badge variant="outline" className="gap-1.5 text-xs">
                 <Wifi className="w-3 h-3" />
-                Source: {isLive ? "Live Integration (API)" : "Demo Data (API)"}
+                Source: {
+                  result?.source === "csv" ? "CSV Upload" :
+                  result?.source === "live" ? "Live Integration (API)" :
+                  result?.source === "demo" ? "Demo Data (API)" : "Static Demo Data"
+                }
               </Badge>
             </div>
             <h1 className="font-display text-4xl sm:text-5xl font-bold mb-4">

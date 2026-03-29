@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Shield, Key, Globe, Cloud, Server, Activity, Users, Building, CheckCircle2, Loader2, Plug, Unplug, Wifi, WifiOff, AlertTriangle } from "lucide-react";
+import { Shield, Key, Globe, Cloud, Server, Activity, Users, Building, CheckCircle2, Loader2, Plug, Unplug, Wifi, WifiOff, AlertTriangle, FileUp, Play } from "lucide-react";
+import { Link } from "react-router-dom";
 import Layout from "@/components/Layout";
 import AnimatedSection from "@/components/AnimatedSection";
 import { Button } from "@/components/ui/button";
@@ -115,10 +116,25 @@ const Integrations = () => {
             </p>
 
             {/* Mode toggle */}
-            <div className="inline-flex items-center gap-3 px-4 py-2.5 rounded-full border border-border/50 bg-card">
-              <span className={`text-sm font-medium ${mode === "demo" ? "text-foreground" : "text-muted-foreground"}`}>Demo Mode</span>
-              <Switch checked={mode === "live"} onCheckedChange={(v) => setMode(v ? "live" : "demo")} />
-              <span className={`text-sm font-medium ${mode === "live" ? "text-foreground" : "text-muted-foreground"}`}>Live Integration</span>
+            <div className="inline-flex items-center gap-1 p-1 rounded-full border border-border/50 bg-card">
+              <button
+                onClick={() => setMode("demo")}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${mode === "demo" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Demo Mode
+              </button>
+              <button
+                onClick={() => setMode("csv")}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${mode === "csv" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                CSV Upload
+              </button>
+              <button
+                onClick={() => setMode("live")}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${mode === "live" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Live Integration
+              </button>
             </div>
           </AnimatedSection>
 
@@ -163,24 +179,41 @@ const Integrations = () => {
 
           {/* Integration Cards */}
           <div className="max-w-5xl mx-auto">
-            {activeCategory !== "all" && categoryLabels[activeCategory] && (
-              <p className="text-sm text-muted-foreground mb-4 text-center">{categoryLabels[activeCategory].description}</p>
+            {mode === "csv" ? (
+              <div className="text-center py-12 rounded-xl border border-border/50 bg-card">
+                <FileUp className="w-12 h-12 text-primary/40 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">CSV Mode Active</h3>
+                <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                  You are currently in CSV mode. You can upload and manage your data directly on the simulation page.
+                </p>
+                <Link to="/simulate">
+                  <Button className="gap-2">
+                    <Play className="w-4 h-4" /> Go to Simulation
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <>
+                {activeCategory !== "all" && categoryLabels[activeCategory] && (
+                  <p className="text-sm text-muted-foreground mb-4 text-center">{categoryLabels[activeCategory].description}</p>
+                )}
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <AnimatePresence mode="popLayout">
+                    {filtered.map((integration, i) => (
+                      <motion.div
+                        key={integration.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ delay: i * 0.05 }}
+                      >
+                        <IntegrationCard integration={integration} />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </>
             )}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <AnimatePresence mode="popLayout">
-                {filtered.map((integration, i) => (
-                  <motion.div
-                    key={integration.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ delay: i * 0.05 }}
-                  >
-                    <IntegrationCard integration={integration} />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
           </div>
 
           {/* Data Health Section */}

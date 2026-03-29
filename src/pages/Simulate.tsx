@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Play, Plug, Wifi, Database, ArrowRight, Loader2, CheckCircle2, AlertTriangle, Building2 } from "lucide-react";
+import { Play, Plug, Wifi, Database, ArrowRight, Loader2, CheckCircle2, AlertTriangle, Building2, FileUp, Trash2 } from "lucide-react";
 import Layout from "@/components/Layout";
 import AnimatedSection from "@/components/AnimatedSection";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { runSimulation } from "@/lib/simulationEngine";
 import { fetchMockAccessEntries } from "@/lib/mockApiData";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import Papa from "papaparse";
 
 const Simulate = () => {
   const { session } = useAuth();
@@ -20,14 +21,17 @@ const Simulate = () => {
   const [running, setRunning] = useState(false);
   const [fetching, setFetching] = useState(false);
   const { setResult } = useSimulation();
-  const { integrations, connectedCount, mode, setMode, dataHealth } = useIntegrations();
+  const { integrations, connectedCount, mode, setMode, dataHealth, setCSVDataHealth } = useIntegrations();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const connectedIntegrations = integrations.filter(i => i.status === "connected");
 
   // Auto-fetch data when integrations are connected
   useEffect(() => {
+    if (mode === "csv") return; // Don't auto-fetch in CSV mode
+
     if (connectedCount > 0 || mode === "demo") {
       setFetching(true);
       const data = fetchMockAccessEntries();
@@ -53,6 +57,85 @@ const Simulate = () => {
     }
   }, [connectedCount, mode]);
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFetching(true);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header) => header.trim(),
+      complete: (results) => {
+        const rawData = results.data as any[];
+        const headers = results.meta.fields || [];
+
+        // Flexible mapping: try to find column names that match our needs
+        // If not found, we'll fall back to the first 4 columns by index
+        const findColumn = (possibleNames: string[], index: number) => {
+          const found = headers.find(h => possibleNames.includes(h.toLowerCase()));
+          return found || headers[index];
+        };
+
+        const colMap = {
+          userId: findColumn(["userid", "user", "id", "username"], 0),
+          role: findColumn(["role", "type", "position"], 1),
+          resource: findColumn(["resource", "system", "app", "target"], 2),
+          permission: findColumn(["permission", "access", "level", "action"], 3)
+        };
+
+        const mappedData = rawData.map(row => ({
+          userId: String(row[colMap.userId] || ""),
+          role: String(row[colMap.role] || ""),
+          resource: String(row[colMap.resource] || ""),
+          permission: String(row[colMap.permission] || "")
+        })).filter(row => row.userId || row.role || row.resource || row.permission);
+
+        if (mappedData.length === 0) {
+          toast({ 
+            title: "No data found", 
+            description: "The CSV file appears to be empty or improperly formatted.", 
+            variant: "destructive" 
+          });
+          setFetching(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          return;
+        }
+
+        // Sync with backend
+        fetch("http://localhost:3001/api/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: mappedData })
+        })
+        .then(res => res.json())
+        .then(json => {
+          setEntries(mappedData);
+          setCSVDataHealth(mappedData.length);
+          setFetching(false);
+          toast({ title: "CSV Processed", description: `Successfully ingested ${mappedData.length} records using flexible mapping.` });
+        })
+        .catch(err => {
+          console.error("Upload failed", err);
+          setEntries(mappedData);
+          setCSVDataHealth(mappedData.length);
+          setFetching(false);
+          toast({ 
+            title: "Local Import Successful", 
+            description: `Loaded ${mappedData.length} records. (Backend sync failed)`, 
+            variant: "warning" 
+          });
+        });
+      },
+      error: (error) => {
+        console.error("CSV Parse error", error);
+        toast({ title: "Parse error", description: "Failed to parse the CSV file.", variant: "destructive" });
+        setFetching(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    });
+  };
+
   const runSim = async () => {
     if (entries.length === 0) {
       toast({ title: "No data available", description: "Connect integrations or enable Demo Mode first.", variant: "destructive" });
@@ -67,7 +150,7 @@ const Simulate = () => {
         body: JSON.stringify({})
       });
       const result = await response.json();
-      setResult(result);
+      setResult({ ...result, source: mode });
       setRunning(false);
       navigate("/dashboard-demo");
     } catch (err) {
@@ -103,10 +186,25 @@ const Simulate = () => {
           {/* Mode Toggle */}
           <AnimatedSection delay={0.05}>
             <div className="flex justify-center mb-8">
-              <div className="inline-flex items-center gap-3 px-4 py-2.5 rounded-full border border-border/50 bg-card">
-                <span className={`text-sm font-medium ${mode === "demo" ? "text-foreground" : "text-muted-foreground"}`}>Demo Mode</span>
-                <Switch checked={mode === "live"} onCheckedChange={(v) => setMode(v ? "live" : "demo")} />
-                <span className={`text-sm font-medium ${mode === "live" ? "text-foreground" : "text-muted-foreground"}`}>Live Integration</span>
+              <div className="inline-flex items-center gap-1 p-1 rounded-full border border-border/50 bg-card">
+                <button
+                  onClick={() => { setMode("demo"); setEntries([]); }}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${mode === "demo" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Demo Mode
+                </button>
+                <button
+                  onClick={() => { setMode("csv"); setEntries([]); }}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${mode === "csv" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  CSV Upload
+                </button>
+                <button
+                  onClick={() => { setMode("live"); setEntries([]); }}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${mode === "live" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Live Integration
+                </button>
               </div>
             </div>
           </AnimatedSection>
@@ -121,7 +219,7 @@ const Simulate = () => {
                   </h3>
                   <Badge variant="outline" className="gap-1.5 text-xs">
                     <Wifi className="w-3 h-3" />
-                    {mode === "demo" ? "Demo API" : "Live Integration (API)"}
+                    {mode === "demo" ? "Demo API" : mode === "csv" ? "Local CSV File" : "Live Integration (API)"}
                   </Badge>
                 </div>
 
@@ -134,6 +232,57 @@ const Simulate = () => {
                       {["/api/users", "/api/roles", "/api/permissions", "/api/activity-logs"].map(ep => (
                         <code key={ep} className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">{ep}</code>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {mode === "csv" && (
+                  <div className="text-sm text-muted-foreground bg-muted/20 rounded-lg p-6 border-2 border-dashed border-border/50">
+                    <div className="flex flex-col items-center text-center">
+                      <FileUp className="w-10 h-10 text-primary/40 mb-3" />
+                      <p className="mb-4">
+                        Upload your access entries in CSV format. 
+                        <br />
+                        <span className="text-xs">
+                          Flexible mapping enabled. Systems will try to auto-detect columns like 
+                          <code className="text-primary mx-1">User</code>, 
+                          <code className="text-primary mx-1">Role</code>, 
+                          <code className="text-primary mx-1">Resource</code>, and 
+                          <code className="text-primary mx-1">Permission</code>.
+                        </span>
+                      </p>
+                      
+                      <div className="flex items-center gap-3">
+                        <Button 
+                          variant="outline" 
+                          className="gap-2"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <FileUp className="w-4 h-4" /> Select CSV File
+                        </Button>
+
+                        {entries.length > 0 && (
+                          <Button 
+                            variant="ghost" 
+                            className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => {
+                              setEntries([]);
+                              if (fileInputRef.current) fileInputRef.current.value = "";
+                              toast({ title: "Data cleared", description: "All ingested entries have been removed." });
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" /> Clear
+                          </Button>
+                        )}
+                      </div>
+
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".csv"
+                        className="hidden"
+                        onChange={handleFileUpload}
+                      />
                     </div>
                   </div>
                 )}
@@ -300,3 +449,4 @@ const Simulate = () => {
 };
 
 export default Simulate;
+

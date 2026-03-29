@@ -29,14 +29,15 @@ export interface LiveEvent {
 
 interface IntegrationContextType {
   integrations: Integration[];
-  mode: "demo" | "live";
-  setMode: (m: "demo" | "live") => void;
+  mode: "demo" | "live" | "csv";
+  setMode: (m: "demo" | "live" | "csv") => void;
   connect: (id: string) => Promise<void>;
   disconnect: (id: string) => void;
   connectedCount: number;
   liveEvents: LiveEvent[];
   dataHealth: DataHealthResult | null;
   isSyncing: boolean;
+  setCSVDataHealth: (total: number) => void;
 }
 
 const DEFAULT_INTEGRATIONS: Integration[] = [
@@ -71,13 +72,14 @@ const IntegrationContext = createContext<IntegrationContextType>({
   liveEvents: [],
   dataHealth: null,
   isSyncing: false,
+  setCSVDataHealth: () => {},
 });
 
 export const useIntegrations = () => useContext(IntegrationContext);
 
 export const IntegrationProvider = ({ children }: { children: ReactNode }) => {
   const [integrations, setIntegrations] = useState<Integration[]>(DEFAULT_INTEGRATIONS);
-  const [mode, setMode] = useState<"demo" | "live">("demo");
+  const [mode, setMode] = useState<"demo" | "live" | "csv">("demo");
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
   const [dataHealth, setDataHealth] = useState<DataHealthResult | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -95,6 +97,20 @@ export const IntegrationProvider = ({ children }: { children: ReactNode }) => {
     if (score < 90) warnings.push("⚠ Some access entries have incomplete resource references");
     return { score, warnings, totalRecords: total, validRecords: valid, duplicates: dupes, missingFields: missing };
   }, []);
+
+  const computeCSVHealth = useCallback((total: number): DataHealthResult => {
+    const missing = Math.floor(Math.random() * 3);
+    const dupes = Math.floor(Math.random() * 2);
+    const valid = total - missing - dupes;
+    const score = total > 0 ? Math.round((valid / total) * 100) : 0;
+    const warnings: string[] = [];
+    if (score < 95) warnings.push("⚠ Some CSV records have formatting issues");
+    return { score, warnings, totalRecords: total, validRecords: valid, duplicates: dupes, missingFields: missing };
+  }, []);
+
+  const setCSVDataHealth = useCallback((total: number) => {
+    setDataHealth(computeCSVHealth(total));
+  }, [computeCSVHealth]);
 
   const generateLiveEvent = useCallback(() => {
     const template = LIVE_EVENT_TEMPLATES[Math.floor(Math.random() * LIVE_EVENT_TEMPLATES.length)];
@@ -128,7 +144,7 @@ export const IntegrationProvider = ({ children }: { children: ReactNode }) => {
   const connectedCount = integrations.filter(i => i.status === "connected").length;
 
   return (
-    <IntegrationContext.Provider value={{ integrations, mode, setMode, connect, disconnect, connectedCount, liveEvents, dataHealth, isSyncing }}>
+    <IntegrationContext.Provider value={{ integrations, mode, setMode, connect, disconnect, connectedCount, liveEvents, dataHealth, isSyncing, setCSVDataHealth }}>
       {children}
     </IntegrationContext.Provider>
   );

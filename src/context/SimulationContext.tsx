@@ -21,6 +21,7 @@ export interface SimulationResult {
   heatmap: { label: string; risk: number; color: string }[];
   scenarios: { text: string; risk: string }[];
   blastRadius: number;
+  source?: "demo" | "live" | "csv";
 }
 
 interface SimulationContextType {
