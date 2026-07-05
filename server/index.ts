@@ -28,10 +28,18 @@ if (dbUrl.startsWith('file:')) {
   }
 }
 
-const db = createClient({
-  url: dbUrl,
-  authToken: process.env.DATABASE_AUTH_TOKEN
-});
+let db: any;
+try {
+  db = createClient({
+    url: dbUrl,
+    authToken: process.env.DATABASE_AUTH_TOKEN
+  });
+} catch (err) {
+  console.warn(`Failed to create database client for ${dbUrl}, falling back to local file:`, err);
+  db = createClient({
+    url: 'file:sentinel.db'
+  });
+}
 
 // Root route for health check
 app.get('/', (req, res) => {
