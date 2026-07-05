@@ -13,11 +13,18 @@ app.use(cors());
 app.use(express.json());
 
 const dbPath = process.env.DATABASE_URL || 'sentinel.db';
-const dbDir = path.dirname(dbPath);
-if (dbDir && dbDir !== '.' && !fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+let db: any;
+
+try {
+  const dbDir = path.dirname(dbPath);
+  if (dbDir && dbDir !== '.' && !fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+  db = new Database(dbPath);
+} catch (error) {
+  console.warn(`Failed to initialize database at ${dbPath}, falling back to local sentinel.db:`, error);
+  db = new Database('sentinel.db');
 }
-const db = new Database(dbPath);
 
 // Root route for health check
 app.get('/', (req, res) => {
