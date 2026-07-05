@@ -9,8 +9,6 @@ services:
       - key: PORT
         value: 3001
       - key: DATABASE_URL
-        value: /data/sentinel.db
-    disk:
-      name: sentinel-data
-      mountPath: /data
-      sizeGB: 1
+        sync: false
+      - key: DATABASE_AUTH_TOKEN
+        sync: false

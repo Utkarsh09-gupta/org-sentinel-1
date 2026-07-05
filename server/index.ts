@@ -1,9 +1,8 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import Database from 'better-sqlite3';
+import { createClient } from '@libsql/client';
 import path from 'path';
-
 import fs from 'fs';
 
 const app = express();
@@ -12,19 +11,27 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-const dbPath = process.env.DATABASE_URL || 'sentinel.db';
-let db: any;
-
-try {
-  const dbDir = path.dirname(dbPath);
-  if (dbDir && dbDir !== '.' && !fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-  }
-  db = new Database(dbPath);
-} catch (error) {
-  console.warn(`Failed to initialize database at ${dbPath}, falling back to local sentinel.db:`, error);
-  db = new Database('sentinel.db');
+let dbUrl = process.env.DATABASE_URL || 'sentinel.db';
+if (dbUrl && !dbUrl.startsWith('libsql://') && !dbUrl.startsWith('https://') && !dbUrl.startsWith('http://') && !dbUrl.startsWith('file:')) {
+  dbUrl = `file:${dbUrl}`;
 }
+
+if (dbUrl.startsWith('file:')) {
+  const localPath = dbUrl.substring(5);
+  const dbDir = path.dirname(localPath);
+  if (dbDir && dbDir !== '.' && !fs.existsSync(dbDir)) {
+    try {
+      fs.mkdirSync(dbDir, { recursive: true });
+    } catch (e) {
+      console.warn(`Failed to create directory for local database:`, e);
+    }
+  }
+}
+
+const db = createClient({
+  url: dbUrl,
+  authToken: process.env.DATABASE_AUTH_TOKEN
+});
 
 // Root route for health check
 app.get('/', (req, res) => {
@@ -35,7 +42,7 @@ app.get('/', (req, res) => {
 });
 
 // Initialize Database
-db.exec(`
+db.execute(`
   CREATE TABLE IF NOT EXISTS access_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     userId TEXT,
@@ -43,7 +50,9 @@ db.exec(`
     resource TEXT,
     permission TEXT
   )
-`);
+`).catch(err => {
+  console.error("Failed to initialize database table:", err);
+});
 
 interface AccessEntry {
   userId: string;
@@ -59,21 +68,29 @@ interface RiskFinding {
   severity: 'Low' | 'Medium' | 'High' | 'Critical';
 }
 
-app.post('/api/upload', (req: Request, res: Response) => {
+app.post('/api/upload', async (req: Request, res: Response) => {
   const data: AccessEntry[] = req.body.data;
   if (data && Array.isArray(data)) {
-    const insert = db.prepare('INSERT INTO access_entries (userId, role, resource, permission) VALUES (?, ?, ?, ?)');
-    const deleteOld = db.prepare('DELETE FROM access_entries');
-    
-    const transaction = db.transaction((entries: AccessEntry[]) => {
-      deleteOld.run();
-      for (const entry of entries) {
-        insert.run(entry.userId, entry.role, entry.resource, entry.permission);
+    try {
+      const transaction = await db.transaction("write");
+      try {
+        await transaction.execute('DELETE FROM access_entries');
+        for (const entry of data) {
+          await transaction.execute({
+            sql: 'INSERT INTO access_entries (userId, role, resource, permission) VALUES (?, ?, ?, ?)',
+            args: [entry.userId, entry.role, entry.resource, entry.permission]
+          });
+        }
+        await transaction.commit();
+      } catch (err) {
+        await transaction.rollback();
+        throw err;
       }
-    });
-
-    transaction(data);
-    res.json({ message: 'Data ingested successfully', count: data.length });
+      res.json({ message: 'Data ingested successfully', count: data.length });
+    } catch (err: any) {
+      console.error("Upload transaction failed", err);
+      res.status(500).json({ error: 'Database transaction failed: ' + err.message });
+    }
   } else {
     res.status(400).json({ error: 'Invalid data format' });
   }
@@ -93,9 +110,16 @@ function riskLevel(score: number) {
 
 const SENSITIVE_RESOURCES = ["customerdb", "customer database", "paymentsystem", "payment system", "cloudstorage", "cloud storage"];
 
-app.post('/api/simulate', (req: Request, res: Response) => {
-  const entries: AccessEntry[] = db.prepare('SELECT userId, role, resource, permission FROM access_entries').all() as AccessEntry[];
-  const findings: RiskFinding[] = [];
+app.post('/api/simulate', async (req: Request, res: Response) => {
+  try {
+    const result = await db.execute('SELECT userId, role, resource, permission FROM access_entries');
+    const entries: AccessEntry[] = result.rows.map(row => ({
+      userId: row.userId as string,
+      role: row.role as string,
+      resource: row.resource as string,
+      permission: row.permission as string
+    }));
+    const findings: RiskFinding[] = [];
 
   for (const e of entries) {
     const role = e.role.toLowerCase();
@@ -233,15 +257,19 @@ app.post('/api/simulate', (req: Request, res: Response) => {
   const scores = Object.values(resourceScores);
   const blastRadius = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
 
-  res.json({
-    entries,
-    nodes,
-    edges,
-    heatmap,
-    scenarios,
-    blastRadius,
-    isAtRisk: findings.length > 0
-  });
+    res.json({
+      entries,
+      nodes,
+      edges,
+      heatmap,
+      scenarios,
+      blastRadius,
+      isAtRisk: findings.length > 0
+    });
+  } catch (err: any) {
+    console.error("Simulation failed", err);
+    res.status(500).json({ error: 'Simulation execution failed: ' + err.message });
+  }
 });
 
 app.listen(port, () => {
