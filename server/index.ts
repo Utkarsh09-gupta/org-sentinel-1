@@ -4,6 +4,8 @@ import multer from 'multer';
 import Database from 'better-sqlite3';
 import path from 'path';
 
+import fs from 'fs';
+
 const app = express();
 const port = process.env.PORT || 3001;
 
@@ -11,6 +13,10 @@ app.use(cors());
 app.use(express.json());
 
 const dbPath = process.env.DATABASE_URL || 'sentinel.db';
+const dbDir = path.dirname(dbPath);
+if (dbDir && dbDir !== '.' && !fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
 const db = new Database(dbPath);
 
 // Root route for health check
