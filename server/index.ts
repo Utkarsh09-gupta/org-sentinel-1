@@ -5,12 +5,13 @@ import Database from 'better-sqlite3';
 import path from 'path';
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
 
-const db = new Database('sentinel.db');
+const dbPath = process.env.DATABASE_URL || 'sentinel.db';
+const db = new Database(dbPath);
 
 // Root route for health check
 app.get('/', (req, res) => {
@@ -77,6 +78,8 @@ function riskLevel(score: number) {
   return "low";
 }
 
+const SENSITIVE_RESOURCES = ["customerdb", "customer database", "paymentsystem", "payment system", "cloudstorage", "cloud storage"];
+
 app.post('/api/simulate', (req: Request, res: Response) => {
   const entries: AccessEntry[] = db.prepare('SELECT userId, role, resource, permission FROM access_entries').all() as AccessEntry[];
   const findings: RiskFinding[] = [];
@@ -113,6 +116,64 @@ app.post('/api/simulate', (req: Request, res: Response) => {
         risk: 'Security Risk',
         description: 'Public exposure of resource',
         severity: 'High'
+      });
+    }
+
+    // client aligned rule 1: Intern reading customer data
+    if (role === 'intern' && resName.includes('customer') && perm === 'read') {
+      findings.push({
+        resource: e.resource,
+        risk: 'Data Exposure',
+        description: `${e.role} exported customer data to personal device`,
+        severity: 'Critical'
+      });
+    }
+
+    // client aligned rule 2: Vendor write to code repos
+    if (role === 'vendor' && (resName.includes('github') || resName.includes('repo')) && (perm === 'write' || perm === 'admin')) {
+      findings.push({
+        resource: e.resource,
+        risk: 'Supply Chain Risk',
+        description: 'Vendor pushed malicious code to repository',
+        severity: 'High'
+      });
+    }
+
+    // client aligned rule 3: Admin access to payment
+    if (role === 'admin' && resName.includes('payment') && perm === 'admin') {
+      findings.push({
+        resource: e.resource,
+        risk: 'Critical Privilege Risk',
+        description: 'Admin privilege misuse affected payment system',
+        severity: 'Critical'
+      });
+    }
+
+    // client aligned rule 4: Write/Admin access to sensitive data
+    if ((perm === 'write' || perm === 'admin') && SENSITIVE_RESOURCES.some(s => resName.includes(s.replace(/\s/g, '')) || resName.includes(s))) {
+      findings.push({
+        resource: e.resource,
+        risk: 'Data Modification Risk',
+        description: `${e.role} has ${e.permission} access to sensitive ${e.resource}`,
+        severity: 'High'
+      });
+    }
+  }
+
+  // client aligned rule 5: Privilege overlap — resources accessed by multiple roles
+  const resourceRoles: Record<string, Set<string>> = {};
+  for (const e of entries) {
+    const key = e.resource;
+    if (!resourceRoles[key]) resourceRoles[key] = new Set();
+    resourceRoles[key].add(e.role);
+  }
+  for (const [resource, roles] of Object.entries(resourceRoles)) {
+    if (roles.size > 1) {
+      findings.push({
+        resource,
+        risk: 'Privilege Overlap',
+        description: `Multiple roles accessed sensitive ${resource}`,
+        severity: 'Medium'
       });
     }
   }

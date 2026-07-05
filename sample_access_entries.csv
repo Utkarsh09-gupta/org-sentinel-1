@@ -1,0 +1,7 @@
+User,Role,Resource,Permission
+u1,Intern,Customer Database,read
+u2,Vendor,GitHub Repo,write
+u3,Admin,Payment System,admin
+u4,Engineer,Cloud Storage,write
+u5,HR,Cloud Storage,read
+u6,Employee,Public,read
