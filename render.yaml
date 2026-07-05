@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: org-sentinel-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run start
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        value: /data/sentinel.db
+    disk:
+      name: sentinel-data
+      mountPath: /data
+      sizeGB: 1
